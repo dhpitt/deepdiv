@@ -49,14 +49,32 @@ class DeepDivResNet(nn.Module):
 
     def __init__(self, backbone, n_heads=3, n_classes=10):
         super(DeepDivResNet, self).__init__()
-        self.models = [SingleResNetHead(resnet=backbone, n_classes=n_classes) for _ in range(n_heads)]
+        self.models = [SingleResNetHead(resnet=deepcopy(backbone), n_classes=n_classes) for _ in range(n_heads)]
         self.classification_loss = torch.nn.CrossEntropyLoss()
+        self.n_heads = n_heads
 
-        
-    def forward(self,x):
-        
+    def forward(self, batch):
+        total_loss = 0
+        x,y = batch
+
+        representations = []
+        for model in self.models:
+            phi = model.extract_features(x)
+            y_hat = model.classify_features(phi)
+            representations.append(phi)
+            total_loss += self.classification_loss(input=y_hat, target=y)
+
+        # get pairwise CKA
+        for i in range(self.n_heads):
+            for j in range(i+1, self.n_heads):
+                total_loss += CKA(representations[i], representations[j])
+
+        return total_loss
             
 
-
-model1 = tm.resnet18(weights=None)
-model2 = deepcopy(model1)
+if __name__ == '__main__':
+    model = DeepDivResNet(backbone=tm.resnet18(), n_heads=4)
+    data = torch.randn((10,3,224,224))
+    model.train()
+    loss = model((data, torch.ones(10,dtype=torch.long)))
+    print(loss)
