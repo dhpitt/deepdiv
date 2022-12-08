@@ -5,4 +5,4 @@ This repo stores the code for my newest project. I'm expanding on two very cool 
 
 and 
 
-### Similarity of Neural Network Representations Revisited (Kornbluth et al.)
+### Similarity of Neural Network Representations Revisited (Kornblith et al.)
