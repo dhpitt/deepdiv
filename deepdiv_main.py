@@ -18,10 +18,10 @@ from torchmetrics.classification import MulticlassAccuracy
 # Constants
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 LR = 1e-3
 NUM_GPUS = 1
-EPOCHS = 10
+EPOCHS = 40
 
 class DeepDivLearner(pl.LightningModule):
     '''
@@ -36,10 +36,12 @@ class DeepDivLearner(pl.LightningModule):
     def training_step(self, batch,_):
         return self.learner(batch)
     
-    def validation_step(self, batch,_):
+    def test_step(self, batch,_):
         x,y = batch
         y_hat = self.learner.infer_by_committee(x)
-        return self.acc(y_hat, y.cuda())
+        acc = self.acc(y_hat, y.cuda())
+        self.log('accuracy', acc, on_epoch=True)
+        return acc
 
     def configure_optimizers(self):
         '''
@@ -60,7 +62,7 @@ val_dataset = CIFAR10(root='/research/cwloka/projects/dpitt/data', download=True
 train_loader = DataLoader(train_dataset, num_workers = 4 * NUM_GPUS, persistent_workers=True, batch_size=BATCH_SIZE)
 val_loader = DataLoader(val_dataset, num_workers = 4 * NUM_GPUS, persistent_workers=True, batch_size=BATCH_SIZE)
 
-model = DeepDivResNet(backbone=resnet18(), n_heads=3)
+model = DeepDivResNet(backbone=resnet18(), n_heads=5)
 learner = DeepDivLearner(model)
 
 trainer = pl.Trainer(
@@ -71,4 +73,5 @@ trainer = pl.Trainer(
                 sync_batchnorm=True,
                 log_every_n_steps=10,
             )
-trainer.fit(model=learner, train_dataloaders=train_loader,  val_dataloaders=val_loader)
+trainer.fit(model=learner, train_dataloaders=train_loader)
+trainer.test(model=learner, dataloaders=val_loader)

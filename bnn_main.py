@@ -10,18 +10,18 @@ from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import ToTensor
 from torchvision.models import resnet18
-from torchmetrics import Accuracy
+from torchmetrics.classification import MulticlassAccuracy
 
 from bnn_models import BayesianResNet
-from ..utils import pairwise_inner_product
+from numeric_utils import get_avg_similarity_per_example
 
 # Constants
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-BATCH_SIZE = 32
+BATCH_SIZE = 256
 LR = 1e-3
 NUM_GPUS = 1
-EPOCHS = 10
+EPOCHS = 1
 
 class BayesianLearner(pl.LightningModule):
     '''
@@ -32,42 +32,53 @@ class BayesianLearner(pl.LightningModule):
         super(BayesianLearner, self).__init__()
         self.learner = model.to(device)
         self.mc_samples = mc_samples
-        self.acc = Accuracy(task='multiclass', num_classes=self.learner.n_classes)
+        self.acc = MulticlassAccuracy(num_classes=self.learner.n_classes).cuda()
         # TODO: replace this with catching all representations for pairwise comparisons
         self.representations = None 
 
 
-    def training_step(self, batch):
+    def training_step(self, batch, _):
+        '''
+        boilerplate training step
+        '''
         return self.learner(batch)
     
-    def test_step(self, batch):
+    def test_step(self, batch, _):
+        '''
+        Compute uncertainty using traditional variance (as in Kendall + Gal)
+            and using average cosine similarity (my new metric)
+        '''
         x,y = batch
-        representations = []
-        y_hats = torch.empty((self.mc_samples, y.size()[0]))
+        representations = torch.empty((self.mc_samples, x.size()[0], self.learner.representation_dim)).cuda()
+        y_hats = torch.empty((self.mc_samples, y.size()[0])).cuda()
         for i in range(self.mc_samples):
-            y_hat, phi = self.learner.infer(x)
+            logits, phi = self.learner.infer(x)
+            p_hat = torch.softmax(logits, dim=1)
+            y_hat = torch.argmax(p_hat, dim=1)
             y_hats[i,:] = y_hat
-            representations.append(phi)
+            representations[i, :, :] = phi
         #y_hat = torch.mean(y_hats, dim=0)
         y_hat_var, y_hat = torch.var_mean(y_hats,unbiased=False, dim=0)
         acc = self.acc(y_hat, y)
-        similarity = pairwise_inner_product(representations=representations)
-        for 
-
+        similarity = get_avg_similarity_per_example(representations=representations)
+        print(f'{similarity=}')
+        return acc
 
 
     def configure_optimizers(self):
-        adam = torch.optim.SGD(self.learner.parameters(), lr=LR, momentum=0.9)
-        return {'optimizer':adam}
+        opt = torch.optim.SGD(self.learner.parameters(), lr=LR, momentum=0.9)
+        return {'optimizer':opt}
 
 
 ## Training
 
-dataset = CIFAR10(root='/research/cwloka/projects/dpitt/data', download=True, train=True, transform=ToTensor())
-loader = DataLoader(dataset, num_workers = 4 * NUM_GPUS, persistent_workers=True, batch_size=BATCH_SIZE)
+train_set = CIFAR10(root='/research/cwloka/projects/dpitt/data', download=True, train=True, transform=ToTensor())
+test_set = CIFAR10(root='/research/cwloka/projects/dpitt/data', download=True, train=False, transform=ToTensor())
+train_loader = DataLoader(train_set, num_workers = 4 * NUM_GPUS, persistent_workers=True, batch_size=BATCH_SIZE)
+test_loader = DataLoader(test_set, num_workers = 4 * NUM_GPUS, persistent_workers=True, batch_size=BATCH_SIZE)
 
-model = DeepDivResNet(backbone=resnet18(), n_heads=3, device=device)
-learner = DeepDivLearner(model)
+model = BayesianResNet(model=resnet18(), n_classes=10)
+learner = BayesianLearner(model)
 
 trainer = pl.Trainer(
                 accelerator='gpu',
@@ -77,4 +88,5 @@ trainer = pl.Trainer(
                 sync_batchnorm=True,
                 log_every_n_steps=10,
             )
-trainer.fit(model=learner, train_dataloaders=loader)
+trainer.fit(model=learner, train_dataloaders=train_loader)
+trainer.test(model=learner, dataloaders=test_loader)

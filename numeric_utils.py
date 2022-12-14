@@ -58,7 +58,7 @@ def OrthogonalProcrustes(A: torch.tensor, B: torch.tensor):
 
     _, S, _ = torch.linalg.svd(A.T @ B)
 
-    return torch.trace(A * A.T) + torch.trace(B @ B.T) - 2 * torch.trace(S)
+    return torch.trace(A @ A.T) + torch.trace(B @ B.T) - 2 * torch.trace(S)
 
 def pairwise_CKA(representations: List[torch.tensor]) -> torch.tensor:
     '''
@@ -103,3 +103,48 @@ def pairwise_inner_product(representations: List[torch.tensor]) -> torch.tensor:
 #         where preds[i, :] is a vector of n_examples predictions
 #     returns the most-voted-for example among the committee of models for each example.
 #     '''
+
+def cosine_similarity_matrix(features: torch.tensor) -> torch.tensor:
+    '''
+    features: a matrix (n_examples, feature_dim) of feature vectors
+    returns cosine similarity matrix where S[i,j] = feature_i . feature_j / (||f_i|| * ||f_j||)
+    '''
+    n = torch.linalg.norm(features, dim=1).unsqueeze(1)
+    nT = n.T
+    sim = features @ features.T
+    sim = sim * 1/n # * = hadamard product
+    return sim * 1/nT
+
+def avg_similarity(S: torch.tensor) -> torch.tensor:
+    '''
+    returns avg. entry of (S - tr(S))/ 2
+    average of all off-diagonal entries (cosine distances from 
+    '''
+    n = S.size()[0]
+    upperTri = torch.triu(S, diagonal=1) # all cosine similarities that aren't self to self
+    avg = torch.sum(upperTri) / ((n**2 - n)/2) # number of off-diagonal elements divided by 2
+    return avg
+
+def get_avg_similarity_per_example(representations: torch.tensor) -> torch.tensor:
+    '''
+    representations: array of shape (num_mc_samples, num_examples, rep_dim)
+    returns the average similarity per example
+    '''
+    n_examples = representations.size()[1]
+    similarities = torch.empty(size=(n_examples,))
+    for i in range(n_examples):
+        example_features = torch.squeeze(representations[:,i,:])
+        cosine_sims = cosine_similarity_matrix(example_features)
+        similarities[i] = avg_similarity(cosine_sims)
+    return similarities
+
+def getIntermediateActivation(name, activation_dict):
+    '''
+    name: intermediate layer name in nn.Module.modules()
+    activation_dict: output dictionary
+    Return the activation of an intermediate layer using
+        nn.module.register_forward_hook
+    '''
+    def hook(model, input, output):
+        activation_dict[name] = output
+    return hook

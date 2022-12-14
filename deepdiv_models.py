@@ -67,7 +67,7 @@ class DeepDivResNet(nn.Module):
             total_loss += self.classification_loss(input=z_hat, target=y)
 
         # get pairwise CKA
-        total_loss += pairwise_CKA(representations)
+        total_loss += pairwise_CKA(representations) / self.n_heads
 
         return total_loss
     
@@ -84,7 +84,6 @@ class DeepDivResNet(nn.Module):
 
             preds[i, :, :] = nn.functional.softmax(z_hat, dim=1)
         p_hat = torch.squeeze(torch.mean(preds, axis=0))
-        print(f'{p_hat.device=}')
         return torch.argmax(p_hat, dim=1)
 
 
