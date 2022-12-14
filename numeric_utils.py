@@ -121,7 +121,7 @@ def avg_similarity(S: torch.tensor) -> torch.tensor:
     average of all off-diagonal entries (cosine distances from 
     '''
     n = S.size()[0]
-    upperTri = torch.triu(S, diagonal=1) # all cosine similarities that aren't self to self
+    upperTri = torch.triu(S, diagonal=1).cuda() # all cosine similarities that aren't self to self
     avg = torch.sum(upperTri) / ((n**2 - n)/2) # number of off-diagonal elements divided by 2
     return avg
 
@@ -131,7 +131,7 @@ def get_avg_similarity_per_example(representations: torch.tensor) -> torch.tenso
     returns the average similarity per example
     '''
     n_examples = representations.size()[1]
-    similarities = torch.empty(size=(n_examples,))
+    similarities = torch.empty(size=(n_examples,)).cuda()
     for i in range(n_examples):
         example_features = torch.squeeze(representations[:,i,:])
         cosine_sims = cosine_similarity_matrix(example_features)

@@ -6,6 +6,7 @@ Based on pytorch_lightning
 
 import pytorch_lightning as pl
 import torch
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from torchvision.datasets import CIFAR10
 from torchvision.transforms import ToTensor
@@ -21,7 +22,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 BATCH_SIZE = 256
 LR = 1e-3
 NUM_GPUS = 1
-EPOCHS = 1
+EPOCHS = 10
 
 class BayesianLearner(pl.LightningModule):
     '''
@@ -57,11 +58,12 @@ class BayesianLearner(pl.LightningModule):
             y_hat = torch.argmax(p_hat, dim=1)
             y_hats[i,:] = y_hat
             representations[i, :, :] = phi
-        #y_hat = torch.mean(y_hats, dim=0)
-        y_hat_var, y_hat = torch.var_mean(y_hats,unbiased=False, dim=0)
+        y_hat_var, y_hat = torch.var_mean(y_hats,unbiased=True, dim=0)
         acc = self.acc(y_hat, y)
         similarity = get_avg_similarity_per_example(representations=representations)
-        print(f'{similarity=}')
+        corr = F.cosine_similarity(y_hat_var, similarity, dim=0)
+        print(f'{corr=}')
+
         return acc
 
 
@@ -88,5 +90,5 @@ trainer = pl.Trainer(
                 sync_batchnorm=True,
                 log_every_n_steps=10,
             )
-trainer.fit(model=learner, train_dataloaders=train_loader)
+#trainer.fit(model=learner, train_dataloaders=train_loader)
 trainer.test(model=learner, dataloaders=test_loader)
