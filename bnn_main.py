@@ -90,5 +90,5 @@ trainer = pl.Trainer(
                 sync_batchnorm=True,
                 log_every_n_steps=10,
             )
-#trainer.fit(model=learner, train_dataloaders=train_loader)
+trainer.fit(model=learner, train_dataloaders=train_loader)
 trainer.test(model=learner, dataloaders=test_loader)
