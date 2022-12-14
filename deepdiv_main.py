@@ -13,7 +13,7 @@ from torchvision.transforms import ToTensor
 
 from deepdiv_models import DeepDivResNet
 from torchvision.models import resnet18
-from torchmetrics import Accuracy
+from torchmetrics.classification import MulticlassAccuracy
 
 # Constants
 
@@ -31,33 +31,36 @@ class DeepDivLearner(pl.LightningModule):
     def __init__(self, model):
         super(DeepDivLearner, self).__init__()
         self.learner = model.to(device)
-        self.acc = Accuracy(task='multiclass', num_classes=self.learner.n_classes)
+        self.acc = MulticlassAccuracy(num_classes=self.learner.n_classes)
 
-    def training_step(self, batch):
+    def training_step(self, batch,_):
         return self.learner(batch)
     
-    def validation_step(self, batch):
+    def validation_step(self, batch,_):
         x,y = batch
         y_hat = self.learner.infer_by_committee(x)
         return self.acc(y_hat, y)
 
-    
     def configure_optimizers(self):
+        '''
+        To keep the number of heads flexible, we need to manually
+        add each model's params to the optimizer.
+        '''
         parameters = []
         for net in self.learner.models:
-            #print(list(net.parameters()))
             parameters.extend(list(net.parameters()))
-        print(f"{parameters=}")
         adam = torch.optim.SGD(parameters, lr=LR, momentum=0.9)
         return {'optimizer':adam}
 
 
 ## Training
 
-dataset = CIFAR10(root='/research/cwloka/projects/dpitt/data', download=True, train=True, transform=ToTensor())
-loader = DataLoader(dataset, num_workers = 4 * NUM_GPUS, persistent_workers=True, batch_size=BATCH_SIZE)
+train_dataset = CIFAR10(root='/research/cwloka/projects/dpitt/data', download=True, train=True, transform=ToTensor())
+val_dataset = CIFAR10(root='/research/cwloka/projects/dpitt/data', download=True, train=False, transform=ToTensor())
+train_loader = DataLoader(train_dataset, num_workers = 4 * NUM_GPUS, persistent_workers=True, batch_size=BATCH_SIZE)
+val_loader = DataLoader(val_dataset, num_workers = 4 * NUM_GPUS, persistent_workers=True, batch_size=BATCH_SIZE)
 
-model = DeepDivResNet(backbone=resnet18(), n_heads=3, device=device)
+model = DeepDivResNet(backbone=resnet18(), n_heads=3)
 learner = DeepDivLearner(model)
 
 trainer = pl.Trainer(
@@ -68,4 +71,4 @@ trainer = pl.Trainer(
                 sync_batchnorm=True,
                 log_every_n_steps=10,
             )
-trainer.fit(model=learner, train_dataloaders=loader)
+trainer.fit(model=learner, train_dataloaders=train_loader,  val_dataloaders=val_loader)

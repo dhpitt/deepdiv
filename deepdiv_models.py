@@ -12,7 +12,7 @@ import torch
 from torch import nn
 import torchvision.models as tm
 
-from ..numeric_utils import pairwise_CKA
+from numeric_utils import pairwise_CKA
 '''
 Model convention: 
 
@@ -78,7 +78,6 @@ class DeepDivResNet(nn.Module):
         x = x.cuda()
 
         preds = torch.empty(size=(self.n_heads, x.size()[0], self.n_classes))
-        preds = []
         for i,model in enumerate(self.models):
             phi = model.extract_features(x)
             z_hat = model.classify_features(phi) # output logits
