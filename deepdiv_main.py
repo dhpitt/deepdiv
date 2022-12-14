@@ -31,7 +31,7 @@ class DeepDivLearner(pl.LightningModule):
     def __init__(self, model):
         super(DeepDivLearner, self).__init__()
         self.learner = model.to(device)
-        self.acc = MulticlassAccuracy(num_classes=self.learner.n_classes)
+        self.acc = MulticlassAccuracy(num_classes=self.learner.n_classes).cuda()
 
     def training_step(self, batch,_):
         return self.learner(batch)
@@ -39,7 +39,7 @@ class DeepDivLearner(pl.LightningModule):
     def validation_step(self, batch,_):
         x,y = batch
         y_hat = self.learner.infer_by_committee(x)
-        return self.acc(y_hat, y)
+        return self.acc(y_hat, y.cuda())
 
     def configure_optimizers(self):
         '''
