@@ -70,6 +70,7 @@ def pairwise_CKA(representations: List[torch.tensor]) -> torch.tensor:
     for i in range(n):
         for j in range(i+1, n):
             total += CKA(representations[i], representations[j])
+    return total
 
 def pairwise_OP(representations: List[torch.tensor]) -> torch.tensor:
     '''
@@ -81,6 +82,7 @@ def pairwise_OP(representations: List[torch.tensor]) -> torch.tensor:
     for i in range(n):
         for j in range(i+1, n):
             total += OrthogonalProcrustes(representations[i], representations[j])
+    return total
 
 def pairwise_inner_product(representations: List[torch.tensor]) -> torch.tensor:
     '''

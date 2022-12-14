@@ -77,13 +77,14 @@ class DeepDivResNet(nn.Module):
         '''
         x = x.cuda()
 
-        preds = torch.empty(size=(self.n_heads, x.size()[0], self.n_classes))
+        preds = torch.empty(size=(self.n_heads, x.size()[0], self.n_classes)).cuda()
         for i,model in enumerate(self.models):
             phi = model.extract_features(x)
             z_hat = model.classify_features(phi) # output logits
 
             preds[i, :, :] = nn.functional.softmax(z_hat, dim=1)
         p_hat = torch.squeeze(torch.mean(preds, axis=0))
+        print(f'{p_hat.device=}')
         return torch.argmax(p_hat, dim=1)
 
 
